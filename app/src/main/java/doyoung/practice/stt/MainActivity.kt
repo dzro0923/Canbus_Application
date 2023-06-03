@@ -30,6 +30,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.*
 import kotlin.collections.ArrayList
+import org.json.JSONObject
 import kotlin.concurrent.thread
 import kotlin.concurrent.timer
 
@@ -45,7 +46,17 @@ private lateinit var msgToServer: String
 private lateinit var departure: String
 private lateinit var destination: String
 private lateinit var busNumber: String
-//busNumber를 통해 Open API 연동만 하면 앱 역할은 끝
+
+// 모비우스의 AE 선택하기
+private lateinit var selectedBus: String
+private lateinit var selectedCNT: String
+val realSelectedCNT = "CANBUS-01_23"
+
+// API 호출을 위한 키들
+private lateinit var stId: String
+private lateinit var busRouteId: String
+private lateinit var ord: String
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -79,7 +90,7 @@ class MainActivity : AppCompatActivity() {
 
         btnSignal.setOnClickListener {
             // 서버에 승차 완료에 대한 메시지 보냄 ex) "탑승 완료한 사용자는 신창역에서 내릴 것이니 유의 바랍니다."
-            val msgToServer2 = departure
+            val msgToServer2 = destination
             sendBoardingCompleteSignal(msgToServer2)
         }
 
@@ -121,7 +132,7 @@ class MainActivity : AppCompatActivity() {
         contents.setText("")
         recording = true
 
-        binding.btnRecord.setText("음성 녹음 중지") // applicationContext 부분의 오류 가능성
+        binding.btnRecord.setText("Stop Record") // applicationContext 부분의 오류 가능성
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(applicationContext)
         speechRecognizer.setRecognitionListener(listener)
         speechRecognizer.startListening(intent)
@@ -130,7 +141,7 @@ class MainActivity : AppCompatActivity() {
     // 녹음 종료
     private fun StopRecord() {
         recording = false
-        binding.btnRecord.setText("음성 녹음 시작")
+        binding.btnRecord.setText("Start Record")
         speechRecognizer.stopListening()
         Toast.makeText(applicationContext, "음성 기록 중지합니다.", Toast.LENGTH_SHORT).show()
 
@@ -231,8 +242,21 @@ class MainActivity : AppCompatActivity() {
     fun assignValuesFromVoiceInput(input: String) {
         val parsedValues = parseVoiceInput(input)
         departure = parsedValues.first ?: "출발지"
+        if(departure == "역촌동 성당") {
+            stId = "111000302"
+        } else {
+            stId = "111000302"
+        }
         destination = parsedValues.second ?: "목적지"
         busNumber = parsedValues.third ?: "00"
+        if(busNumber == "7715"){
+            ord = "21"
+            busRouteId = "100100462"
+        } else {
+            ord = "21"
+            busRouteId = "100100462"
+        }
+        chooseBus()
     }
 
 
@@ -263,7 +287,7 @@ class MainActivity : AppCompatActivity() {
         val mediaType = "application/vnd.onem2m-res+json; ty=4".toMediaType()
         val body = "{\n    \"m2m:cin\": {\n        \"con\": \"$message\"\n    }\n}".toRequestBody(mediaType)
         val request = Request.Builder()
-            .url("http://203.253.128.177:7579/Mobius/Yoon/PathFromUser")
+            .url("http://114.71.220.94:7579/Mobius/Canbus_No.7715/$realSelectedCNT")
             .post(body)
             .addHeader("Accept", "application/json")
             .addHeader("X-M2M-RI", "12345")
@@ -294,11 +318,11 @@ class MainActivity : AppCompatActivity() {
     // 탑승 완료 신호 보내기 ex) 탑승 완료한 사용자는 신창역에서 내릴 것이니 유의 바랍니다. _ RPi에 지속적 디스플레이
     fun sendBoardingCompleteSignal(msgToServer2: String) {
         val client = OkHttpClient()
-        val message = "탑승 완료한 사용자는 $msgToServer2 에서 내릴 것이니 유의 바랍니다."
+        val message = "탑승자는 ${msgToServer2}에서 내립니다."
         val mediaType = "application/vnd.onem2m-res+json; ty=4".toMediaType()
         val body = "{\n    \"m2m:cin\": {\n        \"con\": \"$message\"\n    }\n}".toRequestBody(mediaType)
         val request = Request.Builder()
-            .url("http://203.253.128.177:7579/Mobius/Yoon/PathFromUser")
+            .url("http://114.71.220.94:7579/Mobius/Canbus_No.7715/$realSelectedCNT")
             .post(body)
             .addHeader("Accept", "application/json")
             .addHeader("X-M2M-RI", "12345")
@@ -330,7 +354,7 @@ class MainActivity : AppCompatActivity() {
         val mediaType = "application/vnd.onem2m-res+json; ty=4".toMediaType()
         val body = "{\n    \"m2m:cin\": {\n        \"con\": \"$message\"\n    }\n}".toRequestBody(mediaType)
         val request = Request.Builder()
-            .url("http://203.253.128.177:7579/Mobius/Yoon/PathFromUser")
+            .url("http://114.71.220.94:7579/Mobius/Canbus_No.7715/$realSelectedCNT")
             .post(body)
             .addHeader("Accept", "application/json")
             .addHeader("X-M2M-RI", "12345")
@@ -433,5 +457,49 @@ class MainActivity : AppCompatActivity() {
                 showPermissionSettingDialog()
             }
         }
+    }
+
+    private fun chooseBus() {
+        val client = OkHttpClient()
+        val request = Request.Builder()
+            .url("http://ws.bus.go.kr/api/rest/arrive/getArrInfoByRoute?ServiceKey=aa%2Fun7llG%2BBArgYxreQ7G4BrqKgLkMU71r%2B5JCtH2eFC5l6TkorlwIwRBc0acbCNk9XiTsDSMTJl4Ik%2FqY89Tw%3D%3D&stId=$stId&busRouteId=$busRouteId&ord=$ord&resultType=json")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("Cookie", "WMONID=-NosqV_SRBv")
+            .build()
+
+        // 요청에 대한 콜백
+        val callback = object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("Client", e.toString())
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val responseBody = response.body?.string() // 응답 본문을 변수에 저장
+
+                if (response.isSuccessful && responseBody != null) {
+                    val jsonObject=  JSONObject(responseBody)
+                    // 현재 제공하는 공공데이터 포털의 샘플데이터 예제를 참고하여 vehId1(첫 번째 도착 예정 버스의 ID 값을 파싱한다.)
+
+                    val itemList = jsonObject.getJSONObject("msgBody").getJSONArray("itemList")
+                    val item = itemList.getJSONObject(0)
+                    val vehId1 = item.getString("vehId1")
+
+                    selectedBus = vehId1
+
+                    when(selectedBus) {
+                        "111049715" -> { selectedCNT = "Seoul-75_1214" }//
+                        "111049724" -> { selectedCNT = "Seoul-74_1234" }//
+                        "111049717" -> { selectedCNT = "Seoul-75_1240" }//
+                        "111049722" -> { selectedCNT = "Seoul-70_7028" }//
+                        "111049712" -> { selectedCNT = "Seoul-75_1209" }
+                        else -> {
+                            selectedCNT = "CANBUS-01_23"}
+                    }
+                }
+            }
+        }
+
+        // 요청 보내기
+        client.newCall(request).enqueue(callback)
     }
 }
