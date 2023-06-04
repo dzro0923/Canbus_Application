@@ -320,7 +320,7 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient()
         val message = "탑승자는 ${msgToServer2}에서 내립니다."
         val mediaType = "application/vnd.onem2m-res+json; ty=4".toMediaType()
-        val body = "{\n    \"m2m:cin\": {\n        \"con\": \"$message\"\n    }\n}".toRequestBody(mediaType)
+        val body = "{\n    \"m2m:cin\": {\n        \"con\": \"$message\"\n cd    }\n}".toRequestBody(mediaType)
         val request = Request.Builder()
             .url("http://114.71.220.94:7579/Mobius/Canbus_No.7715/$realSelectedCNT")
             .post(body)
